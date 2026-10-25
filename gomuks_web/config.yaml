@@ -1,0 +1,26 @@
+name: gomuks Web (private ingress)
+version: "0.1.1"
+slug: gomuks_web
+description: Single-user Matrix chat with server-side E2EE and restricted ingress
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: manual
+stage: experimental
+init: true
+timeout: 60
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: mdi:message-lock
+panel_title: Matrix
+panel_admin: false
+host_network: false
+ports: {}
+options:
+  allowed_user_id: ""
+  public_origin: ""
+schema:
+  allowed_user_id: str
+  public_origin: str

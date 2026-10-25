@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+/data/
+/backups/
+options.json
+*.db
+*.db-*
+*.sqlite*
+*.key
+*.pem
+*.zip
