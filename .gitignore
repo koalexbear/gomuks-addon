@@ -13,3 +13,6 @@ options.json
 *.key
 *.pem
 *.zip
+
+# Personal appearance files are not part of this repository.
+/themes/

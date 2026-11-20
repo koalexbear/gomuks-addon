@@ -59,11 +59,22 @@ Instances stay running after the user closes the UI. `max_instances` limits simu
 
 **This is application-level separation inside one trusted container, not a container sandbox per user.** Administrators and the add-on process can access all users' encryption keys and decrypted data. Encrypt backups, restrict host/admin access, and test recovery. A user removed from an allowlist needs an add-on restart to terminate their existing connections. Deleted HA users' stored directories are not automatically removed. Use separate browser profiles for the initial multiuser acceptance test to avoid stale page state when switching accounts.
 
-## Updates and appearance
+## Updates
 
 Increase `version` in `gomuks_web/config.yaml`, upload changes to GitHub, refresh the HA store and update the existing repository-installed add-on. A push alone does not update a running container. Do not uninstall to update.
 
-Paste [salbei-und-stein.css](themes/salbei-und-stein.css) into gomuks **Custom CSS** for colors, typography and rounded surfaces. This does not alter authentication or share Matrix accounts. Light/dark mode follows the browser/system preference rather than synchronizing with the HA profile. See [theme notes](themes/README.md).
+## Create your own appearance
+
+This repository does not ship themes. Create and maintain your personal CSS outside the repository, then paste it into gomuks **Custom CSS**. No add-on rebuild is required.
+
+1. Open gomuks settings and find **Custom CSS**. Save a copy of any existing customization before replacing it.
+2. Choose your own palette, font, spacing and corner radii. To match a Home Assistant theme, copy its relevant color values manually; HA theme variables do not automatically propagate into gomuks or synchronize with its user profile.
+3. Start by overriding gomuks' CSS custom properties on `:root`: `--background-color`, `--text-color`, `--secondary-text-color`, `--primary-color`, `--border-color`, `--composer-background-color` and the room-list background properties. Consult the [stylesheet for the gomuks version used by this add-on](https://github.com/gomuks/gomuks/blob/b1ba2099e9d4c0068c7e614d7141b001848369c5/web/src/index.css) for available variables.
+4. For layout changes, inspect the actual elements in your browser's developer tools. Scope rules to the relevant gomuks components. Adjust typography, padding and rounded surfaces without hiding errors, delivery states, unread indicators or keyboard focus. Preserve the room-list row heights because gomuks uses list virtualization.
+5. Choose a fixed light/dark mode or follow the browser/system preference. If using CSS `light-dark()`, set the appropriate `color-scheme`. This choice is independent of the HA profile.
+6. Apply the CSS and test desktop and mobile layouts, long messages, attachments, replies, unread states and keyboard navigation. Recheck after gomuks updates because selectors may change. Remove the added CSS to revert.
+
+Keep a personal backup outside Git. The root `themes/` directory is ignored to prevent local theme files from being uploaded accidentally. Prefer local system fonts and avoid external imports when you want to keep the customization self-contained. Custom CSS changes presentation only; it does not change account isolation or access control.
 
 ## Tests
 
