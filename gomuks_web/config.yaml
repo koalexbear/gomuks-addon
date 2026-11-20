@@ -1,5 +1,5 @@
 name: gomuks Web (private ingress)
-version: "0.1.1"
+version: "0.3.0"
 slug: gomuks_web
 description: Single-user Matrix chat with server-side E2EE and restricted ingress
 arch:
@@ -21,6 +21,20 @@ ports: {}
 options:
   allowed_user_id: ""
   public_origin: ""
+  enable_calls: false
+  desktop:
+    enabled: false
+    public_origin: ""
+    proxy_host: ""
+    username: ""
+    password: ""
 schema:
   allowed_user_id: str
   public_origin: str
+  enable_calls: bool
+  desktop:
+    enabled: bool
+    public_origin: str
+    proxy_host: str
+    username: str
+    password: password
