@@ -1,101 +1,63 @@
 import pathlib
-import re
 import sys
 import unittest
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'gomuks_web/rootfs'))
-from settings import validate, nginx_config, desktop_settings, private_proxy_ip
+source = pathlib.Path(__file__).resolve().parents[1] / 'gomuks_web/rootfs'
+sys.path.insert(0, str(source if source.is_dir() else pathlib.Path('/opt/addon')))
+from settings import validate, nginx_config, valid_user_id
 
 USER = 'a123456789abcdef0123456789abcdef'
 ORIGIN = 'https://ha.example.de:8123'
 
 
 class SettingsTests(unittest.TestCase):
-    def test_valid(self):
-        self.assertEqual(validate(dict(allowed_user_id=USER, public_origin=ORIGIN)),
-                         (USER, ORIGIN, 'ha.example.de:8123'))
-
-    def test_fail_closed_options(self):
-        for value in ['', USER.upper(), USER + ';', USER + '\n', 'admin']:
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                validate(dict(allowed_user_id=value, public_origin=ORIGIN))
-        for value in ['', '*', 'http://ha.example.de', ORIGIN + '/', ORIGIN + ';',
-                      'https://ha.example.de:99999', 'https://ha.example.de\ninclude /tmp/x;']:
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                validate(dict(allowed_user_id=USER, public_origin=value))
-
-    def test_calls_default_denied_and_explicit_opt_in(self):
-        blocked = nginx_config(USER, ORIGIN, 'abc123')
-        enabled = nginx_config(USER, ORIGIN, 'abc123', enable_calls=True)
-        self.assertIn('microphone=(), camera=(), display-capture=()', blocked)
-        self.assertIn('microphone=(self), camera=(self), display-capture=()', enabled)
-        # Opt-in changes only this policy, never the authentication boundary.
-        self.assertEqual(blocked.replace('microphone=(), camera=()',
-                                         'microphone=(self), camera=(self)'), enabled)
-
-    def test_calls_requires_boolean(self):
-        for value in ('false', 'true', '', None, 0, 1, []):
-            with self.subTest(value=value):
-                with self.assertRaises(ValueError):
-                    validate(dict(allowed_user_id=USER, public_origin=ORIGIN, enable_calls=value))
-                with self.assertRaises(ValueError):
-                    nginx_config(USER, ORIGIN, 'abc123', enable_calls=value)
-
-    def desktop_options(self, **changes):
-        value = dict(enabled=True, public_origin='https://gomuks.example.de',
-                     proxy_host='npm-addon', username='desktop', password='x' * 24)
+    def options(self, **changes):
+        value = dict(public_origins=[ORIGIN], allowed_user_ids=[], max_instances=4)
         value.update(changes)
-        return {'desktop': value}
+        return value
 
-    def test_desktop_opt_in_and_auth_separation(self):
-        self.assertIsNone(desktop_settings({}))
-        disabled = nginx_config(USER, ORIGIN, 'INTERNAL')
-        self.assertNotIn('listen 8098', disabled)
-        desktop = desktop_settings(self.desktop_options())
-        config = nginx_config(USER, ORIGIN, 'INTERNAL', desktop=desktop, desktop_proxy_ip='172.30.33.5')
-        ingress, separate = config.split('listen 8098;', 1)
-        self.assertIn('Basic INTERNAL', ingress)
-        self.assertNotIn('INTERNAL', separate)
-        self.assertIn('allow 172.30.33.5;', separate)
-        self.assertIn('deny all;', separate)
-        self.assertIn('Authorization $http_authorization', separate)
-        self.assertIn('Cookie $http_cookie', separate)
-        self.assertNotIn('proxy_hide_header Set-Cookie', separate)
-        self.assertNotIn('proxy_hide_header WWW-Authenticate', separate)
-        self.assertIn('if ($http_x_forwarded_proto != "https")', separate)
-        self.assertIn('if ($desktop_host_ok = 0)', separate)
-        self.assertNotIn(desktop.password, config)
-        self.assertNotIn(desktop.password, repr(desktop))
+    def test_user_ids_are_exact(self):
+        self.assertTrue(valid_user_id(USER))
+        for user in ('', USER.upper(), USER+'/', '../'+USER, USER+', '+USER, None):
+            self.assertFalse(valid_user_id(user))
 
-    def test_desktop_validates_secrets_and_injection(self):
-        for key, value in (('enabled', 'false'), ('username', 'x:y'),
-                           ('password', 'short'), ('password', 'x'*73),
-                           ('password', 'x'*24+'\n'), ('public_origin', 'https://evil.test;'),
-                           ('public_origin', 'http://gomuks.test'),
-                           ('proxy_host', 'npm; include /tmp/x;')):
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                desktop_settings(self.desktop_options(**{key: value}))
-        for value in ('0.0.0.0', '127.0.0.1', '8.8.8.8', '::1', '172.30.33.5;'):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                private_proxy_ip(value)
-        self.assertEqual(private_proxy_ip('172.30.33.5'), '172.30.33.5')
+    def test_multiple_origins(self):
+        settings = validate(self.options(public_origins=[ORIGIN, 'https://ha.lan.example.de']))
+        self.assertEqual(settings.authorities, ('ha.example.de:8123', 'ha.lan.example.de'))
+        self.assertFalse(settings.allowed_users)
 
-    def test_diagnostics_do_not_log_secrets(self):
-        config = nginx_config(USER, ORIGIN, 'abc123')
-        log = config.split("log_format ingress_gate ", 1)[1].split(';', 1)[0]
-        for secret in ('$request', '$http_authorization', '$http_cookie', '$http_origin',
-                       '$http_x_remote_user_id', USER, 'abc123'):
-            self.assertNotIn(secret, log)
-        self.assertIn('403 1;', config)
-        self.assertIn('if=$log_denial', config)
+    def test_invalid_options(self):
+        for key, values in (
+            ('public_origins', [[], '*', ['http://ha.test'], [ORIGIN+'/'], [ORIGIN+';'], ['https://ha.test:99999']]),
+            ('allowed_user_ids', ['*', [USER.upper()], ['../x']]),
+            ('max_instances', [0, 17, True, '4']),
+            ('legacy_owner_id', ['admin', USER.upper()]),
+        ):
+            for value in values:
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    validate(self.options(**{key: value}))
 
-    def test_security_and_exact_case(self):
-        config = nginx_config(USER, ORIGIN, 'abc123')
-        self.assertIn('allow 172.30.32.2;\n        deny all;', config)
-        self.assertIn('~^' + USER + '$ 1;', config)
-        self.assertIn('~^' + re.escape(ORIGIN) + '$ 1;', config)
-        self.assertIn('proxy_pass http://127.0.0.1:29325;', config)
-        self.assertNotIn('real_ip_header', config)
+    def test_legacy_owner_and_origin_compatibility(self):
+        settings = validate(dict(public_origin=ORIGIN, allowed_user_id=USER))
+        self.assertEqual(settings.origins, (ORIGIN,))
+        self.assertEqual(settings.legacy_owner, USER)
+        self.assertFalse(settings.allowed_users)
+        restricted = validate(self.options(allowed_user_ids=[USER]))
+        self.assertEqual(restricted.allowed_users, {USER})
+
+    def test_proxy_never_exposes_credentials_or_desktop(self):
+        config = nginx_config(validate(self.options()))
+        self.assertIn('allow 172.30.32.2;', config)
+        self.assertIn('deny all;', config)
+        self.assertIn('internal;\n            proxy_pass http://127.0.0.1:29324/auth;', config)
+        self.assertIn('auth_request /_addon_auth;', config)
         self.assertIn('proxy_set_header Cookie "";', config)
+        self.assertNotIn('listen 8098', config)
+        self.assertNotIn('real_ip_header', config)
+        self.assertIn('microphone=(), camera=(), display-capture=()', config)
+        self.assertIn('location ^~ /element-call-embedded/ { return 404; }', config)
+        log = config.split('log_format ingress_gate ', 1)[1].split(';', 1)[0]
+        for forbidden in ('$request', '$http_cookie', '$http_x_remote_user_id', '$backend_auth'):
+            self.assertNotIn(forbidden, log)
 
 
 if __name__ == '__main__':

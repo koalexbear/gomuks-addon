@@ -1,90 +1,86 @@
 # gomuks Web for Home Assistant
 
-A single-user Matrix client for Home Assistant OS, with gomuks Web, end-to-end encryption and Home Assistant Ingress. One configured HA user can access one gomuks backend and one Matrix account.
+Multiuser Matrix chat for Home Assistant OS. Each authenticated HA-Ingress user gets a separate gomuks backend, Matrix login, database and encryption-key store.
 
-**Experimental.** Chat has been tested on HA OS. Calls and native desktop access need further testing in a real HA/Nginx Proxy Manager setup.
+**Version 0.4.0 is experimental.** Multiuser routing is tested in an isolated container; real HA sessions with two Matrix accounts, upgrades and backup/restore still need acceptance on a test instance.
 
 [![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fkoalexbear%2Fgomuks-addon)
 
-## Features
+## What changed in 0.4.0
 
-- HA-Ingress access restricted to an exact HA user ID and the Supervisor's network address.
-- No published host ports and no host networking. gomuks listens on container loopback.
-- Persistent configuration, messages and encryption keys under `/data/gomuks`.
-- Optional microphone/camera permissions for embedded Element Call, disabled by default. An existing MatrixRTC backend is required; screen sharing stays blocked.
-- Optional native Linux desktop access through an internal Nginx Proxy Manager connection, disabled by default and protected by separate gomuks credentials.
-- Optional Salbei & Stein custom CSS with light/dark palettes and rounded surfaces.
+- A private gomuks instance starts on demand for each HA user. The Supervisor-provided user ID selects the instance on every request, including WebSockets and media.
+- Calls and the native desktop endpoint have been removed from the add-on. Microphone, camera and screen capture remain blocked, and the bundled Element Call path returns 404. Upstream gomuks may still show call controls; this add-on does not support them.
+- No desktop credentials, proxy hostname or additional listener to configure. HA-Ingress is the only route.
+- Multiple explicit HA HTTPS origins are supported. No arbitrary Origin or forwarded identity is trusted.
 
-**Matrix encryption keys and decrypted content reside on the HA host.** Trust the host, administrators and backups accordingly. HA-user authentication protects Ingress; desktop credentials independently grant access to the same Matrix account when that route is enabled.
+## Install
 
-## Install from GitHub
-
-1. In Home Assistant, open **Settings → Apps/Add-ons → App/Add-on Store → ⋮ → Repositories**.
-2. Add `https://github.com/koalexbear/gomuks-addon` or use the button above. The repository must be readable by your Supervisor; private GitHub repositories require additional authentication.
-3. Install **gomuks Web (private ingress)**. The image is built on your HA device; internet access to the upstream image registry and Alpine repositories is required.
-4. Configure the add-on, replacing the example values:
+1. In HA, open **Settings → Apps/Add-ons → App/Add-on Store → ⋮ → Repositories**.
+2. Add `https://github.com/koalexbear/gomuks-addon`. The Supervisor must be able to read the repository; private GitHub repositories need separate authentication.
+3. Install **gomuks Web (private ingress)**. The image is built on your HA device and needs network access to the upstream registry and Alpine repositories.
+4. Configure:
 
    ```yaml
-   allowed_user_id: "0123456789abcdef0123456789abcdef"
-   public_origin: "https://ha.example.com"
-   enable_calls: false
-   desktop:
-     enabled: false
-     public_origin: ""
-     proxy_host: ""
-     username: ""
-     password: ""
+   public_origins:
+     - "https://ha.example.com"
+   allowed_user_ids: []
+   max_instances: 4
+   legacy_owner_id: ""
    ```
 
-5. Start the add-on and select **Open Web UI**. Sign in to Matrix and verify the device with a trusted Matrix client.
+5. Start the add-on and open its web UI. Each HA user signs in to their own Matrix account and verifies their new Matrix device using a trusted client.
 
-`allowed_user_id` is the internal ID of your HA user, not a username or Matrix ID. `public_origin` is the exact HTTPS address of **Home Assistant**, including any explicit port, without a path or trailing slash. Do not use the Matrix homeserver URL or its `.well-known` discovery address here.
+`public_origins` lists the exact HTTPS addresses used to open **Home Assistant**, including any explicit port, without paths or trailing slashes. These are not Matrix homeserver addresses. Add a second origin only if you actually use it. A consistent hostname with split DNS also works for LAN access.
 
-Never commit actual options, Matrix credentials, tokens, databases or keys. The examples contain placeholders only.
+An empty `allowed_user_ids` list permits **all authenticated HA-Ingress users**, including non-admin users, to use their own instance. For restricted access, list their exact 32-character lowercase HA IDs. This list is an admission rule; it never selects a shared Matrix account. Missing or malformed identities are always denied.
 
-### Updates
+## Upgrading an existing single-user installation
 
-For each add-on update, increase `version` in `gomuks_web/config.yaml` and upload the changes to GitHub. Refresh/check for updates in the HA store, then update the existing repository-installed add-on. A GitHub push alone does not update a running container. Back up before updating; do not uninstall to update.
+**Back up the stopped add-on before updating. Migration moves its data directory; downgrading requires restoring the pre-update backup. Test this first on a disposable test installation.**
 
-### Moving from a local installation
+1. Keep the existing add-on installed. Record the HA user ID that owns its current Matrix account.
+2. Update to 0.4.0, set `public_origins`, and set `legacy_owner_id` to that exact owner ID. The previous `allowed_user_id`, if still present in saved options, is accepted as a migration fallback. The old `public_origin` is also accepted as an origin fallback.
+3. Remove old `enable_calls` and `desktop` options from saved YAML. Remove/disable any old NPM desktop proxy host as well; port 8098 is no longer served.
+4. Start. `/data/gomuks` is moved to `/data/users/<owner-id>/gomuks`. Existing files are not copied to other users. Absolute paths in the old gomuks configuration are updated when its owner's backend starts.
+5. If the owner is missing, invalid, or both old and destination data exist, startup stops. It never assigns an existing account to the first visitor or overwrites a destination.
+6. Open as the original owner and confirm the existing Matrix device, history and decryption. Open as a different HA user: they must get their own fresh Matrix login, not the owner's account.
 
-**The local add-on and the repository-installed add-on have different HA identifiers and separate data directories. Adding this repository does not migrate your current Matrix session, keys or history.**
+The deprecated `allowed_user_id` is **migration metadata only** in 0.4.0. It does not retain the old single-user admission restriction. Use `allowed_user_ids` to limit who may create/use an instance.
 
-Before switching, back up the existing local add-on and confirm that you have working Matrix recovery/key backup. Keep the local installation and its data. Stop it, install the repository version, copy the appropriate HA options, and sign in as a new Matrix device. Verify that device and restore the required encryption history before removing anything. Do not run two backends using copies of the same Matrix crypto database.
+Moving from `/addons` to a GitHub-installed add-on is a different operation: HA assigns another add-on identifier and a separate data directory. Adding this repository does not automatically transfer a local add-on's data. Keep the old installation and backup until a deliberate migration or new Matrix-device login/recovery has been verified. Never run two copies of one Matrix crypto database simultaneously.
 
-If you need to preserve the exact existing Matrix device/session, plan a stopped-data migration before switching; this repository does not automate that transfer. Native desktop proxy targets may also need updating because the internal add-on hostname changes.
+## Isolation, persistence and limits
 
-## Optional calls and desktop access
+Persistent data is stored under `/data/users/<ha-user-id>/gomuks`, including each user's config, database/keys, cache and logs. User IDs must match the strict ID format before any path or process is created. Internal credentials are random and unique per backend start; the proxy strips browser cookies and authorization headers and injects only the selected backend's credentials. Backend cookies are not returned to browsers.
 
-Set `enable_calls: true` to permit microphone/camera requests by the same-origin embedded Element Call frontend. This does not install RTC services or grant permission through a restrictive parent iframe. First test joining an existing encrypted call on your HA test instance. See the [detailed setup and test guide (German)](gomuks_web/DOCS.md).
+Only port 8099 listens on the internal add-on network and it accepts the Supervisor at `172.30.32.2` only. The auth manager and individual backends use loopback. No host ports, host networking, Supervisor API permission or additional filesystem mounts are enabled.
 
-For native Linux gomuks, use the [English desktop setup guide](DESKTOP.md). NPM terminates HTTPS and forwards to internal port 8098; no new host-port mapping is needed. Desktop access uses separate credentials, not an HA session. Use only on networks where this is permitted; company/VPN access is not assumed.
+Instances stay running after the user closes the UI. `max_instances` limits simultaneously running backends (default 4, range 1–16). At capacity, another user's request returns 503 without creating their directory or reusing anyone else's instance. Restarting the add-on frees all running slots while retaining data. A crashed backend can restart on its next request. Plan CPU, RAM and storage for one gomuks process per active user; there is no automatic idle eviction or per-user disk quota yet.
 
-## Appearance
+**This is application-level separation inside one trusted container, not a container sandbox per user.** Administrators and the add-on process can access all users' encryption keys and decrypted data. Encrypt backups, restrict host/admin access, and test recovery. A user removed from an allowlist needs an add-on restart to terminate their existing connections. Deleted HA users' stored directories are not automatically removed. Use separate browser profiles for the initial multiuser acceptance test to avoid stale page state when switching accounts.
 
-Paste [salbei-und-stein.css](themes/salbei-und-stein.css) into gomuks **Custom CSS**. It includes colors, typography, rounded chat panels, message surfaces and larger controls. No rebuild is required. Light/dark mode follows the browser/system preference, not the HA profile automatically. Change `color-scheme: light dark;` to `light` or `dark` to force a mode. See [theme notes (German)](themes/README.md).
+## Updates and appearance
 
-## Validation status
+Increase `version` in `gomuks_web/config.yaml`, upload changes to GitHub, refresh the HA store and update the existing repository-installed add-on. A push alone does not update a running container. Do not uninstall to update.
 
-- Operator-confirmed on HA OS: image build, HTTPS-Ingress behind NPM, Matrix device verification, encrypted chat, persistence after add-on restart, and denial of a second HA user.
-- Locally passed on AMD64: image build, eight Python tests, Ingress proxy regression test, and real-gomuks desktop authentication/cookie/WebSocket smoke test.
-- Still pending: full HA restart, update and backup/restore acceptance, actual native Linux/NPM operation, calls through HA-Ingress, and ARM64 acceptance of the desktop route.
+Paste [salbei-und-stein.css](themes/salbei-und-stein.css) into gomuks **Custom CSS** for colors, typography and rounded surfaces. This does not alter authentication or share Matrix accounts. Light/dark mode follows the browser/system preference rather than synchronizing with the HA profile. See [theme notes](themes/README.md).
 
-These are limited checks, not a claim of production readiness. The detailed documentation records the individual test dates and limitations.
-
-## Development
+## Tests
 
 ```sh
-python3 -m unittest discover -s tests -v
-docker build --build-arg BUILD_ARCH=amd64 -t gomuks-ha:test gomuks_web
+docker build --build-arg BUILD_ARCH=amd64 -t gomuks-ha:multiuser gomuks_web
 docker run --rm --network none --entrypoint python3 \
-  -v "$PWD/tests:/tests:ro" gomuks-ha:test /tests/proxy_smoke.py
+  -v "$PWD/tests:/tests:ro" gomuks-ha:multiuser -m unittest discover -s /tests -v
 docker run --rm --network none --entrypoint python3 \
-  -v "$PWD/tests:/tests:ro" gomuks-ha:test /tests/desktop_smoke.py
+  -v "$PWD/tests:/tests:ro" gomuks-ha:multiuser /tests/multiuser_smoke.py
 ```
 
-The image build needs network access. The smoke tests publish no ports and run without network access. Use `BUILD_ARCH=aarch64` with an appropriate builder for ARM64. You can also install locally by copying `gomuks_web` into `/addons/gomuks_web` and refreshing the store. Rebuild after source changes; restarting alone does not copy new source into the image.
+Use `BUILD_ARCH=aarch64` with an appropriate builder for ARM64. Unit tests needing bcrypt run in the built image. `python3 -m unittest discover -s tests -v` also runs the settings tests locally and skips instance tests if bcrypt is unavailable.
+
+Tests cover strict IDs/origins, access lists, legacy owner migration, destination conflicts, symlink rejection, per-user HTTP/upload/SSE/WebSocket routing, forged credentials/cookies, the Supervisor peer gate, blocked calls, capacity, crash recovery, and independent persistent roots with actual gomuks binaries. The network peer is first denied with the production configuration and then simulated on loopback only inside the test.
+
+Real HA acceptance must additionally verify two different Matrix accounts in two encrypted rooms, restart persistence, attachment isolation, allowlist revocation and backup/restore. See [the full checklist](gomuks_web/DOCS.md). Previous single-user E2EE tests do not by themselves validate this multiuser release. No changes are made to MatrixRTC, the Matrix homeserver or your running HA instance by uploading this source.
 
 ## Upstream and licensing
 
-The image uses architecture-specific upstream gomuks CI tags for commit `b1ba2099e9d4c0068c7e614d7141b001848369c5`; tags are not registry-digest pins. [gomuks](https://github.com/gomuks/gomuks) is licensed under AGPL-3.0-or-later. See [third-party notes](THIRD_PARTY.md) before redistributing built images. No separate open-source license has yet been selected for this wrapper.
+The image uses architecture-specific upstream CI tags for gomuks commit `b1ba2099e9d4c0068c7e614d7141b001848369c5`; these are not registry-digest pins. [gomuks](https://github.com/gomuks/gomuks) is AGPL-3.0-or-later. See [third-party notes](THIRD_PARTY.md) before distributing built images. No separate open-source license has yet been selected for this wrapper.

@@ -1,9 +1,9 @@
 # gomuks Web (private ingress)
 
-Single-user Matrix chat with server-side E2EE, Home Assistant Ingress and an exact HA-user-ID access check. No published host ports.
+Multiuser Matrix chat: each authenticated HA user gets a separate gomuks backend, Matrix account login, database and encryption-key store. HA-Ingress is the only supported access route; no published host ports.
 
-Set `public_origin` to the HTTPS address of **Home Assistant**, not your Matrix homeserver. Encryption keys and decrypted data reside in the private add-on data directory on the HA host.
+Configure the exact Home Assistant HTTPS addresses in `public_origins`. Empty `allowed_user_ids` permits all authenticated HA-Ingress users, each with their own instance. `max_instances` limits the number of running backends.
 
-Calls and native desktop access are optional and disabled by default. Desktop access uses separate gomuks credentials and is independent of HA login. Read the Documentation tab before enabling either feature.
+**Before updating from single-user versions, back up the stopped add-on and set `legacy_owner_id` to the existing account owner's HA user ID.** No existing data is assigned to the first visitor. Calls and native desktop access are removed in 0.4.0.
 
-The [repository README](https://github.com/koalexbear/gomuks-addon#readme) covers installation, updates, migration and the validation status. Existing local installations are separate from repository installations; their data is not migrated automatically.
+Experimental. Read the Documentation tab for migration, security boundaries and the two-account acceptance test. The [repository README](https://github.com/koalexbear/gomuks-addon#readme) contains installation and development instructions.

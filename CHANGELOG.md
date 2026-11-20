@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-11-20
+
+**Breaking change: multiuser chat through HA-Ingress only. Back up before migration.**
+
+- Separate gomuks backend, Matrix login, data/keys/cache/logs for each authenticated HA user.
+- On-demand startup, optional user admission list, and a configurable running-instance limit.
+- Strict owner-only migration of legacy single-user data; no first-visitor assignment.
+- Support multiple explicitly allowed Home Assistant HTTPS origins.
+- Remove the native desktop listener/configuration and Element Call opt-in. Block the bundled call frontend and keep media permissions denied.
+- Replace obsolete single-user/desktop tests with multiuser routing, isolation and migration tests.
+
+
 ## 0.3.0 — 2026-10-27
 
 - Optionaler Desktop-Listener auf internem Port 8098, standardmäßig aus, ohne Host-Portzuordnung.

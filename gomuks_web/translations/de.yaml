@@ -1,27 +1,19 @@
 configuration:
-  allowed_user_id:
-    name: Zugelassene HA-Benutzer-ID
-    description: Interne Benutzer-ID des einzigen zugelassenen Home-Assistant-Benutzers.
+  public_origins:
+    name: HTTPS-Adressen von Home Assistant
+    description: Erlaubte HTTPS-Adressen, ohne Pfad oder abschließenden Schrägstrich. Keine Matrix-Homeserver-Adresse.
+  allowed_user_ids:
+    name: Zugelassene HA-Benutzer
+    description: Leer bedeutet alle über HA-Ingress authentifizierten Benutzer, jeweils mit eigener Instanz. Optional auf exakte HA-Benutzer-IDs beschränken.
+  max_instances:
+    name: Maximal gleichzeitig laufende Instanzen
+    description: Eine Instanz je Benutzer, startet beim ersten Aufruf. Bei Erreichen der Grenze erhalten weitere Benutzer 503. Neustart beendet alle laufenden Instanzen, ohne ihre Daten zu löschen.
+  legacy_owner_id:
+    name: Besitzer bisheriger Einzelbenutzerdaten
+    description: Nur für Migration. Bisherige Daten gehören ausschließlich dieser HA-Benutzer-ID; niemals automatisch dem ersten Besucher.
   public_origin:
-    name: HTTPS-Adresse von Home Assistant
-    description: Exakte Adresse inklusive optionalem Port, ohne Pfad oder abschließenden Schrägstrich.
-  enable_calls:
-    name: Mikrofon und Kamera für Element Call freigeben
-    description: Erlaubt dem eingebetteten gomuks-Call Mikrofon und Kamera anzufragen. Benötigt ein funktionierendes MatrixRTC-Backend. Bildschirmfreigabe bleibt gesperrt. Danach neu starten.
-  desktop:
-    name: Nativer Desktop-Zugang
-    description: Optionaler Zugang über einen eigenen HTTPS-Proxy-Host in Nginx Proxy Manager; unabhängig von der HA-Anmeldung.
-    fields:
-      enabled:
-        name: Desktop-Zugang aktivieren
-      public_origin:
-        name: HTTPS-Adresse für gomuks Desktop
-        description: Eigener Hostname ohne Pfad oder abschließenden Schrägstrich.
-      proxy_host:
-        name: Interner Hostname des NPM-Add-ons
-        description: Exakter Add-on-Hostname. Wird beim Start auf eine private IPv4-Adresse aufgelöst.
-      username:
-        name: Desktop-Benutzername
-      password:
-        name: Desktop-Passwort
-        description: Eigenes zufälliges Passwort, mindestens 20 Zeichen und maximal 72 UTF-8-Bytes. Kein HA- oder Matrix-Passwort.
+    name: Bisherige HTTPS-Adresse (veraltet)
+    description: Kompatibilität mit älteren Installationen. Stattdessen HTTPS-Adressen von Home Assistant verwenden.
+  allowed_user_id:
+    name: Bisheriger Benutzer (veraltet)
+    description: Nur als Eigentümer für bestehende Einzelbenutzerdaten übernommen. Beschränkt nicht mehr den allgemeinen Zugriff; dafür Zugelassene HA-Benutzer verwenden.

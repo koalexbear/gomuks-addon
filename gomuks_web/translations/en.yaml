@@ -1,0 +1,19 @@
+configuration:
+  public_origins:
+    name: Home Assistant HTTPS addresses
+    description: Allowed HTTPS origins, without a path or trailing slash. These are HA addresses, not Matrix homeserver addresses.
+  allowed_user_ids:
+    name: Allowed HA users
+    description: Empty allows all authenticated HA-Ingress users, each with their own backend. Optionally restrict to exact HA user IDs.
+  max_instances:
+    name: Maximum running instances
+    description: One backend starts per user on first access. Additional users receive 503 at capacity. Restart frees running slots without deleting data.
+  legacy_owner_id:
+    name: Owner of existing single-user data
+    description: Migration only. Existing data is assigned exclusively to this HA user ID, never to the first visitor.
+  public_origin:
+    name: Previous HTTPS address (deprecated)
+    description: Upgrade compatibility only. Use Home Assistant HTTPS addresses instead.
+  allowed_user_id:
+    name: Previous user ID (deprecated)
+    description: Used only as the owner of legacy data. Use Allowed HA users to restrict access.
